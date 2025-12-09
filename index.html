@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>要吃啥？ - 附近店家隨機選擇器</title>
+    <!-- 載入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 定義滾動條樣式，讓列表看起來更美觀 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1; /* gray-300 */
+            border-radius: 3px;
+        }
+        .custom-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 transparent;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans min-h-screen">
+
+    <!-- 網站標題 -->
+    <header class="text-center p-4 pt-8">
+        <h1 class="text-5xl font-extrabold text-indigo-700 tracking-tighter">
+            要吃啥 <span class="text-yellow-500">?</span>
+        </h1>
+        <p class="text-gray-500 mt-2">電腦隨機幫您選擇，解決選擇困難症！</p>
+    </header>
+
+    <!-- 總體佈局 (Responsive Grid - now a single column) -->
+    <main class="max-w-3xl mx-auto p-4 sm:p-8">
+        
+        <!-- ======================================================= -->
+        <!-- 區域一: 附近的店家列表 (含篩選) - 現在是唯一的區塊 -->
+        <!-- ======================================================= -->
+        <section id="local-section" class="bg-white p-6 rounded-2xl shadow-xl border-t-4 border-indigo-500 h-full">
+            <h2 class="text-2xl font-bold text-gray-800 flex items-center mb-4">
+                <!-- MapPin Icon (Lucide SVG) -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 mr-2 text-indigo-500"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                附近店家選擇器 (<span id="local-store-count">0</span> 間)
+            </h2>
+            
+            <!-- 📍 目前位置資訊 -->
+            <div id="location-status" class="mb-4 p-3 bg-indigo-50 rounded-lg text-sm text-indigo-700 font-medium flex items-center">
+                <!-- MapPin Icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                正在獲取您的目前位置...
+            </div>
+
+            <!-- ⚙️ 篩選器 -->
+            <div class="flex flex-wrap gap-4 mb-6 p-4 border rounded-xl bg-gray-50">
+                
+                <!-- 午餐/晚餐切換 -->
+                <div class="flex-1 min-w-[120px]">
+                    <label for="meal-selector" class="text-xs font-semibold text-gray-600 flex items-center mb-1">
+                        <!-- Clock Icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        時段
+                    </label>
+                    <select id="meal-selector" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="午餐">午餐 (Lunch)</option>
+                        <option value="晚餐">晚餐 (Dinner)</option>
+                    </select>
+                </div>
+                
+                <!-- 價位篩選 -->
+                <div class="flex-1 min-w-[120px]">
+                    <label for="price-filter" class="text-xs font-semibold text-gray-600 flex items-center mb-1">
+                        <!-- DollarSign Icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        最高價位
+                    </label>
+                    <select id="price-filter" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="5">💰💰💰💰💰 (不限)</option>
+                        <option value="4">💰💰💰💰 (中高)</option>
+                        <option value="3">💰💰💰 (中等)</option>
+                        <option value="2">💰💰 (平價)</option>
+                        <option value="1">💰 (超值)</option>
+                    </select>
+                </div>
+
+                <!-- 距離篩選 -->
+                <div class="flex-1 min-w-[120px]">
+                    <label for="distance-filter" class="text-xs font-semibold text-gray-600 flex items-center mb-1">
+                        <!-- MapPin Icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                        最大距離 (km)
+                    </label>
+                    <select id="distance-filter" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="1">1 km</option>
+                        <option value="3" selected>3 km</option>
+                        <option value="5">5 km</option>
+                        <option value="10">10 km</option>
+                        <option value="99">不限距離</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 隨機選擇按鈕 -->
+            <button
+                id="local-select-btn"
+                class="w-full py-3 mb-4 bg-red-500 text-white font-bold text-xl rounded-xl shadow-lg hover:bg-red-600 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center transform hover:scale-[1.01] active:scale-100"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 mr-2 animate-bounce"><path d="M12.5 17.5 17 21l-5.5-5.5"/><path d="M15 6.5 20 2l-3 3"/><path d="M2 12s2-4 6-4 6 4 6 4"/><path d="M2 12s2 4 6 4 6-4 6-4"/></svg>
+                從 0 間中隨機選擇！
+            </button>
+
+            <!-- 店家列表 -->
+            <div id="local-stores-list" class="mt-4 space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                <h3 class="text-lg font-semibold text-gray-700">符合條件的店家預覽:</h3>
+                <div class="text-center text-gray-500 p-4">資料載入中...</div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 隨機結果 Modal -->
+    <div id="result-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 hidden">
+        <div id="modal-content" class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm text-center transform scale-100 transition-transform duration-300">
+            <div class="mb-4">
+                <!-- Sparkles Icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-12 h-12 text-yellow-500 mx-auto animate-pulse"><path d="m12 3-1.92 5.8 5.46 3.86-5.46-3.86-1.92 5.8 5.46-3.86-5.46 3.86-1.92-5.8 5.46 3.86-5.46-3.86z"/><path d="m22 17-1.92 5.8 5.46 3.86-5.46-3.86-1.92 5.8 5.46-3.86-5.46 3.86-1.92-5.8 5.46 3.86-5.46-3.86z"/><path d="m18 10-1.92 5.8 5.46 3.86-5.46-3.86-1.92 5.8 5.46-3.86-5.46 3.86-1.92-5.8 5.46 3.86-5.46-3.86z"/></svg>
+            </div>
+            <h2 id="modal-title" class="text-2xl font-extrabold text-gray-900 mb-2">決定是它了！</h2>
+            <p id="modal-source" class="text-sm text-gray-500 mb-4">來自 附近店家 的推薦</p>
+
+            <div class="p-4 bg-yellow-50 rounded-lg border-2 border-yellow-300">
+                <p id="modal-restaurant-name" class="text-3xl font-black text-yellow-800"></p>
+                <p id="modal-restaurant-cuisine" class="mt-1 text-lg text-yellow-700"></p>
+            </div>
+
+            <button
+                id="modal-close-btn"
+                class="mt-6 w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition"
+            >
+                太棒了，我要去吃！
+            </button>
+        </div>
+    </div>
+
+
+    <script>
+        // =======================================================
+        // 📌 全域狀態 (Global State)
+        // =======================================================
+        const state = {
+            userLocation: null,
+            localStores: [],
+            isLoading: true,
+            selectedMeal: '午餐',
+            filters: {
+                price: 5,
+                maxDistance: 3,
+            },
+            // 模擬附近的店家數據
+            mockLocalRestaurants: [
+                { id: 1, name: "巷口牛肉麵", cuisine: "中式", price: 2, distance: 0.5, rating: 4.2 },
+                { id: 2, name: "健康輕食沙拉", cuisine: "西式", price: 3, distance: 1.2, rating: 4.8 },
+                { id: 3, name: "美味日式定食", cuisine: "日式", price: 4, distance: 0.3, rating: 3.9 },
+                { id: 4, name: "老王便當店", cuisine: "台式", price: 1, distance: 2.5, rating: 4.5 },
+                { id: 5, name: "韓式炸雞", cuisine: "韓式", price: 3, distance: 0.8, rating: 4.1 },
+                { id: 6, name: "傳統早餐店 (晚餐時段不開)", cuisine: "中式", price: 1, distance: 0.1, rating: 4.0 },
+            ],
+        };
+
+        // =======================================================
+        // 🛠️ 輔助工具函數 (Helper Functions)
+        // =======================================================
+
+        // 模擬 Supabase 數據獲取
+        const mockFetch = (data, delay = 500) => {
+            return new Promise(resolve => setTimeout(() => resolve(data), delay));
+        };
+
+        // 更新狀態並觸發 UI 渲染
+        const setState = (newState) => {
+            Object.assign(state, newState);
+            updateUI();
+        };
+
+        // ---------------------------------------------------
+        // UI 組件生成器
+        // ---------------------------------------------------
+
+        /**
+         * 生成店家卡片的 HTML
+         * @param {Object} store - 店家數據
+         * @returns {string} HTML 字符串
+         */
+        const createStoreCard = (store) => {
+            return `
+                <div class="p-4 bg-white/70 backdrop-blur-sm rounded-xl shadow-lg border border-gray-100 flex justify-between items-center transform transition duration-300 hover:scale-[1.01]">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">${store.name}</h3>
+                        <p class="text-sm text-gray-500">${store.cuisine}</p>
+                        <div class="flex items-center space-x-2 mt-1 text-xs">
+                            <span class="flex items-center text-yellow-600">
+                                <!-- Star Icon -->
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                ${store.rating}
+                            </span>
+                            ${store.distance ? `<span class="text-blue-500 font-medium">${store.distance.toFixed(1)} km</span>` : ''}
+                            <span class="text-green-600">${'💰'.repeat(store.price)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        // ---------------------------------------------------
+        // DOM 更新函數 (Update UI)
+        // ---------------------------------------------------
+
+        /**
+         * 根據當前狀態更新所有相關的 UI 元素。
+         */
+        const updateUI = () => {
+            const { userLocation, localStores, isLoading, filters, selectedMeal } = state;
+
+            // 1. 地理位置狀態更新
+            const locationEl = document.getElementById('location-status');
+            if (userLocation) {
+                const icon = userLocation.status && userLocation.status.includes('無法定位')
+                    ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2 text-red-500"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/><path d="M16.95 7.05 19.07 4.93"/><line x1="12" x2="12" y1="2" y2="4"/><line x1="12" x2="12" y1="20" y2="22"/></svg>`
+                    : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
+
+                locationEl.innerHTML = `
+                    ${icon}
+                    ${userLocation.status || `目前位置：緯度: ${userLocation.lat.toFixed(3)}, 經度: ${userLocation.lng.toFixed(3)}`}
+                `;
+            }
+
+            // 2. 篩選後的本地店家列表
+            const filteredLocalStores = localStores.filter(store => {
+                if (store.price > filters.price) return false;
+                if (store.distance > filters.maxDistance) return false;
+                // 簡易的時段篩選
+                if (selectedMeal === '晚餐' && store.name.includes('早餐')) return false; 
+                return true;
+            });
+
+            // 3. 更新附近店家列表
+            const localListEl = document.getElementById('local-stores-list');
+            const localCountEl = document.getElementById('local-store-count');
+            const localBtnEl = document.getElementById('local-select-btn');
+            
+            localCountEl.textContent = filteredLocalStores.length;
+            localListEl.innerHTML = ''; // 清空列表
+
+            if (isLoading) {
+                localListEl.innerHTML = '<div class="text-center text-gray-500 p-4">資料載入中...</div>';
+                localBtnEl.textContent = '載入中...';
+                localBtnEl.disabled = true;
+            } else if (filteredLocalStores.length === 0) {
+                localListEl.innerHTML = '<p class="text-center text-gray-500 p-4">無符合條件店家，請調整篩選條件。</p>';
+                localBtnEl.textContent = '無符合條件店家';
+                localBtnEl.disabled = true;
+            } else {
+                localBtnEl.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 mr-2 animate-bounce"><path d="M12.5 17.5 17 21l-5.5-5.5"/><path d="M15 6.5 20 2l-3 3"/><path d="M2 12s2-4 6-4 6 4 6 4"/><path d="M2 12s2 4 6 4 6-4 6-4"/></svg>
+                    從 ${filteredLocalStores.length} 間中隨機選擇！
+                `;
+                localBtnEl.disabled = false;
+                
+                // 僅顯示前 5 個預覽
+                const limitedStores = filteredLocalStores.slice(0, 5);
+                const listHtml = limitedStores.map(store => createStoreCard(store)).join('');
+                
+                localListEl.innerHTML = `<h3 class="text-lg font-semibold text-gray-700">符合條件的店家預覽:</h3><div class="space-y-3 mt-3">${listHtml}</div>`;
+                if (filteredLocalStores.length > 5) {
+                    localListEl.innerHTML += `<p class="text-sm text-center text-gray-500 mt-2">... 還有 ${filteredLocalStores.length - 5} 間符合條件的店家</p>`;
+                }
+            }
+        };
+
+        // ---------------------------------------------------
+        // 核心邏輯函數 (Core Logic)
+        // ---------------------------------------------------
+
+        /**
+         * 處理地理位置獲取 (因執行環境限制，直接使用預設位置)
+         */
+        const initGeolocation = () => {
+            // 預設位置 (台北 101 附近)
+            const defaultLocation = { 
+                lat: 25.033, 
+                lng: 121.565, 
+                status: '注意：環境限制無法定位，已使用預設位置 (台北 101 附近)。' 
+            };
+
+            // 由於 Canvas/iFrame 環境的 permissions policy 限制，navigator.geolocation.getCurrentPosition() 
+            // 會導致 "Geolocation has been disabled in this document by permissions policy" 錯誤。
+            // 故直接使用預設位置，並避免呼叫被禁用的 API。
+            setState({ userLocation: defaultLocation });
+            fetchData();
+        };
+
+        /**
+         * 模擬資料載入
+         */
+        const fetchData = async () => {
+            setState({ isLoading: true });
+            
+            try {
+                // 模擬獲取附近的店家
+                const localData = await mockFetch(state.mockLocalRestaurants, 500);
+                
+                setState({ 
+                    localStores: localData,
+                });
+            } catch (e) {
+                console.error('Failed to fetch data:', e);
+                // 載入失敗，使用備援數據
+                setState({ 
+                    localStores: state.mockLocalRestaurants,
+                });
+            } finally {
+                setState({ isLoading: false });
+            }
+        };
+
+        /**
+         * 隨機選擇店家
+         */
+        const handleRandomSelect = () => {
+            const { localStores, filters, selectedMeal } = state;
+            
+            // 重新計算篩選後的列表
+            const listToChoose = localStores.filter(store => {
+                if (store.price > filters.price) return false;
+                if (store.distance > filters.maxDistance) return false;
+                if (selectedMeal === '晚餐' && store.name.includes('早餐')) return false;
+                return true;
+            });
+
+            let result = null;
+            if (listToChoose.length === 0) {
+                result = { name: '😢 抱歉', cuisine: '無符合條件的店家' };
+            } else {
+                const randomIndex = Math.floor(Math.random() * listToChoose.length);
+                result = listToChoose[randomIndex];
+            }
+
+            // 固定來源名稱為「附近店家」
+            showResultModal(result, '附近店家');
+        };
+        
+        /**
+         * 顯示結果彈窗
+         * @param {Object} result - 選擇結果
+         * @param {string} source - 來源名稱
+         */
+        const showResultModal = (result, source) => {
+            document.getElementById('modal-restaurant-name').textContent = result.name;
+            document.getElementById('modal-restaurant-cuisine').textContent = result.name === '😢 抱歉' ? '' : result.cuisine;
+            document.getElementById('modal-title').textContent = result.name === '😢 抱歉' ? result.name : '決定是它了！';
+            document.getElementById('modal-source').textContent = result.name === '😢 抱歉' ? result.cuisine : `來自 ${source} 的推薦`;
+
+            document.getElementById('result-modal').classList.remove('hidden');
+        };
+
+        /**
+         * 隱藏結果彈窗
+         */
+        const hideResultModal = () => {
+            document.getElementById('result-modal').classList.add('hidden');
+        };
+
+
+        // =======================================================
+        // 🚀 初始化與事件監聽 (Initialization and Event Listeners)
+        // =======================================================
+
+        window.onload = () => {
+            // 1. 初始數據載入與定位
+            initGeolocation();
+            
+            // 2. 篩選器事件監聽
+            document.getElementById('meal-selector').addEventListener('change', (e) => {
+                setState({ selectedMeal: e.target.value });
+            });
+            document.getElementById('price-filter').addEventListener('change', (e) => {
+                setState({ filters: { ...state.filters, price: parseInt(e.target.value) } });
+            });
+            document.getElementById('distance-filter').addEventListener('change', (e) => {
+                setState({ filters: { ...state.filters, maxDistance: parseInt(e.target.value) } });
+            });
+            
+            // 3. 隨機選擇按鈕事件監聽
+            document.getElementById('local-select-btn').addEventListener('click', () => {
+                handleRandomSelect(); // 移除 source 參數，因為只有一個來源
+            });
+
+            // 4. Modal 關閉事件監聽
+            document.getElementById('modal-close-btn').addEventListener('click', hideResultModal);
+            document.getElementById('result-modal').addEventListener('click', (e) => {
+                // 點擊背景關閉 Modal
+                if (e.target.id === 'result-modal') {
+                    hideResultModal();
+                }
+            });
+        };
+    </script>
+</body>
+</html>
