@@ -19,9 +19,9 @@
 
     <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden">
         
-        <!-- 版本號碼顯示區域 (更新為 v8.0) -->
+        <!-- 版本號碼顯示區域 (更新為 v12.0 - 動態載入篩選選項) -->
         <div class="text-right p-2 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">
-            版本號: v8.0
+            版本號: v12.0 (動態載入篩選選項)
         </div>
         
         <!-- 標題區域 -->
@@ -52,19 +52,14 @@
 
         <!-- 第二個區域：店家資料列表 (篩選器) -->
         <section id="data-area" class="p-6">
-            <!-- 已將標題中的 "(Supabase 資料)" 移除 -->
             <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b pb-2">🍽️ 店家清單</h2>
             
             <!-- 價位篩選器 -->
             <div class="mb-6 flex flex-wrap items-center space-x-4">
                 <label for="price-filter" class="text-gray-700 font-medium whitespace-nowrap">依價位篩選:</label>
+                <!-- NOTICE: 篩選選項現在僅包含一個預設值，其他將由 JavaScript 根據資料庫內容動態填充 -->
                 <select id="price-filter" class="p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-yellow-500 focus:border-yellow-500 transition duration-150">
                     <option value="all">所有價位</option>
-                    <!-- !!! 關鍵更新: 使用中文字元作為 value。請確保 Supabase price_range 欄位的值完全匹配這些字串 !!! -->
-                    <option value="平價">平價</option> 
-                    <option value="中">中</option>
-                    <option value="中-中高">中-中高</option>
-                    <option value="高">高</option>
                 </select>
             </div>
             
@@ -108,7 +103,63 @@
         const loadingMessage = document.getElementById('loading-message');
         const priceFilter = document.getElementById('price-filter'); // 篩選器參考
 
-        let allRestaurants = []; // 儲存所有從 Supabase 取得的店家資料
+        let allRestaurants = []; // 儲存所有從 Supabase 取得的店家資料 (經過客戶端過濾後)
+
+        /**
+         * @description 用於清理字串，移除常見的空白符和隱藏的控制字元。
+         * @param {string} str - 待清理的字串
+         * @returns {string} - 清理後的字串
+         */
+        function deepCleanString(str) {
+            if (!str) return '';
+            let cleaned = String(str).trim();
+            // 移除所有 ASCII 控制字元 (\u0000-\u001F, \u007F-\u009F)，以及常見的零寬度/非標準空白符
+            cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F\u2000-\u200F\u2028-\u202F\u205F\u3000\uFEFF]/g, '');
+            return cleaned;
+        }
+        
+        /**
+         * @description 動態生成價位篩選器的選項。
+         * @param {Array<string>} priceRanges - 獨一無二的價位字串陣列 (已清理過)。
+         */
+        function populatePriceFilter(priceRanges) {
+            // 保留當前選中的值，以便在重新填充後恢復，避免選擇跳回 '所有價位'
+            const previouslySelectedValue = priceFilter.value;
+            
+            // 清空除了 '所有價位' 以外的選項
+            priceFilter.innerHTML = '<option value="all">所有價位</option>';
+
+            // 確保 priceRanges 是唯一、非空且非 'N/A' 的
+            const uniqueRanges = [...new Set(priceRanges)].filter(range => range && range !== 'N/A');
+            
+            // 可選: 排序以便更好的用戶體驗
+            uniqueRanges.sort((a, b) => a.localeCompare(b, 'zh-TW', { sensitivity: 'base' })); 
+
+            let shouldRestoreSelection = false;
+
+            uniqueRanges.forEach(range => {
+                const option = document.createElement('option');
+                // value 和顯示文字都使用深度清理過的值
+                option.value = range; 
+                option.textContent = range;
+                
+                // 檢查是否需要恢復選取狀態
+                if (range === previouslySelectedValue) {
+                    option.selected = true;
+                    shouldRestoreSelection = true;
+                }
+                
+                priceFilter.appendChild(option);
+            });
+            
+            // 如果舊的選項不在新列表中，則預設選取 '所有價位'
+            if (previouslySelectedValue !== 'all' && !shouldRestoreSelection) {
+                priceFilter.value = 'all'; 
+            }
+            
+            console.log(`[DEBUG] 價位篩選器已根據資料庫數據動態填充：${uniqueRanges.join(', ')}`);
+        }
+
 
         // --- 3. 核心功能函式 ---
 
@@ -134,11 +185,14 @@
                 const mapLink = restaurant.google_map_link && restaurant.google_map_link.startsWith('http') 
                                 ? restaurant.google_map_link 
                                 : '#';
+                
+                // 確保價格欄位在顯示時是乾淨的
+                const displayPriceRange = deepCleanString(restaurant.price_range || 'N/A'); 
 
                 row.innerHTML = `
                     <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${restaurant.name || 'N/A'}</td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${restaurant.type || 'N/A'}</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${restaurant.price_range || 'N/A'}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${displayPriceRange}</td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${restaurant.opening_hours || 'N/A'}</td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm">
                         ${mapLink !== '#' ? 
@@ -151,7 +205,7 @@
         }
 
         /**
-         * @description 從 Supabase 載入所有店家資料 (根據篩選條件)
+         * @description 從 Supabase 載入所有店家資料，並在客戶端過濾
          */
         async function loadRestaurants() {
             loadingMessage.classList.remove('hidden'); // 顯示載入訊息
@@ -169,7 +223,7 @@
             if (!supabaseClient) {
                 try {
                     supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                    console.log("Supabase 客戶端初始化成功。");
+                    console.log("[DEBUG] Supabase 客戶端初始化成功。");
                 } catch (e) {
                     console.error('Supabase 客戶端初始化失敗:', e);
                     resultDisplay.innerHTML = '<p class="text-red-600 font-bold">⚠️ 連線錯誤：Supabase URL 無效，請檢查格式是否正確 (需包含 https://)。</p>';
@@ -179,23 +233,10 @@
             }
             
             try {
-                // 基礎查詢
-                let query = supabaseClient
+                // 基礎查詢 - 無論篩選條件為何，都先獲取所有資料
+                const { data, error } = await supabaseClient
                     .from('restaurants')
                     .select('name, type, price_range, opening_hours, google_map_link');
-                
-                // 取得選定的價位篩選值
-                const selectedPrice = priceFilter.value;
-
-                // 應用價位篩選
-                if (selectedPrice !== 'all') {
-                    // Supabase 的篩選條件：price_range 欄位必須等於選定的值
-                    // 這個值必須與 <select> option 的 value 屬性完全一致。
-                    query = query.eq('price_range', selectedPrice); 
-                }
-
-                // 執行查詢
-                const { data, error } = await query;
 
                 if (error) {
                     console.error('Supabase 載入資料失敗:', error);
@@ -203,15 +244,48 @@
                     restaurantTableBody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-red-600 italic">無法載入資料。</td></tr>';
                     return;
                 }
-
-                allRestaurants = data; // 更新全域變數 (現在只包含篩選後的資料)
-                renderRestaurantTable(data); // 渲染表格
                 
-                // 更新隨機選擇區域的提示
-                if (data.length === 0) {
-                     resultDisplay.innerHTML = '<p class="text-orange-500 font-bold">篩選結果：找不到符合條件的店家！</p>';
+                // V12.0 新增步驟: 1. 提取並動態填充篩選選項
+                if (data) {
+                    const allPriceRanges = data.map(r => r.price_range ? deepCleanString(r.price_range) : '');
+                    populatePriceFilter(allPriceRanges);
+                }
+                
+                // 2. 取得並深度清理篩選器值 (在 populatePriceFilter 之後獲取最新的值)
+                const selectedPriceRaw = priceFilter.value;
+                const selectedPrice = deepCleanString(selectedPriceRaw); 
+                
+                console.log(`[DEBUG] 篩選器值 (v12.0 深度清理): '${selectedPrice}' (原始: '${selectedPriceRaw}')`);
+
+                let filteredRestaurants = data;
+                
+                // 3. 應用客戶端深度過濾
+                if (selectedPrice !== 'all' && data) {
+                    filteredRestaurants = data.filter(restaurant => {
+                        // 對資料庫中的 price_range 值也進行深度清理
+                        const dbPrice = deepCleanString(restaurant.price_range);
+                        
+                        // 執行比較，兩邊都已深度清理
+                        return dbPrice === selectedPrice;
+                    });
+                    console.log(`[DEBUG] 應用客戶端深度過濾: price_range = '${selectedPrice}'，匹配到 ${filteredRestaurants.length} 筆。`);
                 } else {
-                     resultDisplay.innerHTML = `<p class="text-gray-500 italic">👆 已篩選出 ${data.length} 間店家，點擊按鈕隨機選擇！</p>`;
+                    console.log("[DEBUG] 篩選器設為 '所有價位'，顯示所有資料。");
+                }
+
+                allRestaurants = filteredRestaurants; // 更新全域變數 (已過濾)
+                renderRestaurantTable(allRestaurants); // 渲染表格
+                
+                console.log(`[DEBUG] 載入成功，總共 ${allRestaurants.length} 筆資料 (客戶端過濾後)。`);
+
+                // 更新隨機選擇區域的提示
+                if (allRestaurants.length === 0 && selectedPrice !== 'all') {
+                     resultDisplay.innerHTML = `<p class="text-orange-500 font-bold">篩選結果：找不到符合條件的店家！請確認 Supabase 資料庫中 price_range 欄位值是否與選項「${selectedPrice}」完全一致。</p>`;
+                } else if (allRestaurants.length === 0 && selectedPrice === 'all') {
+                     resultDisplay.innerHTML = '<p class="text-red-600 font-bold">資料庫中目前沒有任何店家資料。</p>';
+                }
+                 else {
+                     resultDisplay.innerHTML = `<p class="text-gray-500 italic">👆 已篩選出 ${allRestaurants.length} 間店家，點擊按鈕隨機選擇！</p>`;
                 }
 
             } catch (err) {
@@ -263,7 +337,7 @@
                     <h3 class="text-3xl font-extrabold text-green-700 mt-2">🎉 今日午餐就是：<span class="text-red-600">${selectedRestaurant.name}</span></h3>
                     <div class="mt-3 text-lg space-y-1">
                         <p>🍜 類型: <span class="font-semibold">${selectedRestaurant.type || '未知'}</span></p>
-                        <p>💰 價位: <span class="font-semibold">${selectedRestaurant.price_range || '未知'}</span></p>
+                        <p>💰 價位: <span class="font-semibold">${deepCleanString(selectedRestaurant.price_range || '未知')}</span></p>
                         <p>🕒 營業時間: <span class="font-semibold">${selectedRestaurant.opening_hours || '未知'}</span></p>
                     </div>
                     ${mapLink !== '#' ? 
@@ -282,6 +356,8 @@
         randomButton.addEventListener('click', selectRandomRestaurant);
         
         // 監聽價位篩選器變動，重新載入資料
+        // 注意：由於 priceFilter 的選項是動態生成的，我們必須在每次載入資料後，
+        // 確保 loadRestaurants 執行過濾邏輯。
         priceFilter.addEventListener('change', loadRestaurants);
 
         // 網頁載入完成時，立即載入店家資料
