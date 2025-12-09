@@ -1,621 +1,291 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>要吃啥？ - Leaflet/OSM 版本</title>
-    
-    <!-- 載入 Tailwind CSS CDN -->
+    <title>要吃啥 - 午餐隨機選擇器</title>
+    <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 載入 Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
+    <!-- 載入 Inter 字體 -->
     <style>
-        /* Leaflet 地圖容器樣式 */
-        #map-container {
-            height: 300px; /* 固定地圖高度 */
-            width: 100%;
-            border-radius: 0.75rem; /* rounded-xl */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-            z-index: 0; /* 確保地圖不會蓋過其他元素 */
-        }
-        /* 定義滾動條樣式，讓列表看起來更美觀 */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background-color: #cbd5e1; /* gray-300 */
-            border-radius: 3px;
-        }
-        .custom-scrollbar {
-            scrollbar-width: thin;
-            scrollbar-color: #cbd5e1 transparent;
-        }
-        /* 隱藏 Leaflet 內建的預設標記，因為我們使用自定義標記 */
-        .leaflet-marker-icon.custom-div-icon {
-            border: none;
-            background: none;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* 淺灰色背景 */
         }
     </style>
 </head>
-<body class="bg-gray-50 font-sans min-h-screen">
+<body class="min-h-screen p-4 sm:p-8">
 
-    <!-- 網站標題與版本號 -->
-    <header class="text-center p-4 pt-8">
-        <!-- 顯示版本號碼 -->
-        <div class="absolute top-2 right-2 text-xs text-gray-400 p-1 border border-gray-200 rounded-lg">
-            版本號碼: <span id="app-version">11 (Fix 400)</span>
+    <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden">
+        
+        <!-- 版本號碼顯示區域 (更新為 v8.0) -->
+        <div class="text-right p-2 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">
+            版本號: v8.0
         </div>
         
-        <h1 class="text-5xl font-extrabold text-indigo-700 tracking-tighter">
-            要吃啥 <span class="text-yellow-500">?</span>
-        </h1>
-        <p class="text-gray-500 mt-2">輸入地址，電腦隨機幫您選擇，解決選擇困難症！</p>
-        <p class="text-xs text-red-500 mt-1 font-medium">⚠️ 注意：本應用使用 Leaflet/OpenStreetMap 服務，速度和準確性可能受限。</p>
-    </header>
+        <!-- 標題區域 -->
+        <header class="p-6 bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-md">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-center tracking-tight">
+                🍜 要吃啥 🍔
+            </h1>
+            <p class="text-center text-sm mt-1 opacity-90">讓命運幫你決定今天的午餐！</p>
+        </header>
 
-    <!-- 總體佈局 -->
-    <main class="max-w-3xl mx-auto p-4 sm:p-8">
-        
-        <!-- ======================================================= -->
-        <!-- 區域一: 地址輸入與地圖顯示 -->
-        <!-- ======================================================= -->
-        <section id="local-section" class="bg-white p-6 rounded-2xl shadow-xl border-t-4 border-indigo-500 h-full">
-            <h2 class="text-2xl font-bold text-gray-800 flex items-center mb-4">
-                <!-- MapPin Icon (Lucide SVG) -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 mr-2 text-indigo-500"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                地點設定與店家選擇 (<span id="local-store-count">0</span> 間)
-            </h2>
-            
-            <!-- 📍 地址輸入區域 -->
-            <div id="address-input-controls" class="p-3 bg-indigo-50 rounded-xl mt-3 mb-4 border border-indigo-200">
-                <p class="text-xs font-semibold text-indigo-700 mb-2 flex items-center">
-                    <!-- Home Icon -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                    輸入您想要搜尋的基準地址 (範例：台北車站)
-                </p>
-                <div class="flex flex-wrap gap-2 items-stretch">
-                    <input 
-                        type="text" 
-                        id="search-address" 
-                        placeholder="例如：台北車站、忠孝東路一段..." 
-                        class="flex-1 p-3 border border-indigo-300 rounded-lg text-sm min-w-0 focus:border-indigo-600 focus:ring-indigo-600 shadow-sm"
-                        value="台北車站"
-                    >
-                    <button 
-                        id="search-location-btn" 
-                        class="p-3 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition shadow-md whitespace-nowrap flex items-center justify-center"
-                    >
-                        <!-- Search Icon -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-1"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                        搜尋地點
-                    </button>
-                </div>
-            </div>
-
-            <!-- 📍 目前設定的位置狀態顯示 -->
-            <div id="location-status" class="flex-1 p-3 bg-gray-200 rounded-lg text-sm text-gray-700 font-medium flex items-center mb-6 border border-gray-300">
-                <!-- Loader Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                請輸入地址並點擊「搜尋地點」...
-            </div>
-            
-            <!-- 🗺️ Leaflet 地圖容器 -->
-            <div id="map-container" class="mb-6 bg-gray-100 flex items-center justify-center text-gray-400">
-                地圖載入中...
-            </div>
-
-
-            <!-- ⚙️ 篩選器 -->
-            <div class="flex flex-wrap gap-4 mt-6 mb-6 p-4 border rounded-xl bg-gray-50">
+        <!-- 第一個區域：隨機選擇器 -->
+        <section id="selection-area" class="p-6 border-b border-gray-100">
+            <div class="flex flex-col items-center space-y-4">
                 
-                <!-- 午餐/晚餐切換 (時段篩選為模擬) -->
-                <div class="flex-1 min-w-[120px]">
-                    <label for="meal-selector" class="text-xs font-semibold text-gray-600 flex items-center mb-1">
-                        <!-- Clock Icon -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        時段
-                    </label>
-                    <select id="meal-selector" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="午餐">午餐 (Lunch)</option>
-                        <option value="晚餐">晚餐 (Dinner)</option>
-                    </select>
-                </div>
-                
-                <!-- 價位篩選 (Nominatim 無真實數據，此為隨機模擬) -->
-                <div class="flex-1 min-w-[120px]">
-                    <label for="price-filter" class="text-xs font-semibold text-gray-600 flex items-center mb-1">
-                        <!-- DollarSign Icon -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                        最高價位 (模擬)
-                    </label>
-                    <select id="price-filter" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="5">💰💰💰💰💰 (不限)</option>
-                        <option value="4">💰💰💰💰 (中高)</option>
-                        <option value="3">💰💰💰 (中等)</option>
-                        <option value="2">💰💰 (平價)</option>
-                        <option value="1">💰 (超值)</option>
-                    </select>
-                </div>
+                <!-- 隨機選擇按鈕 -->
+                <button id="random-button" 
+                        class="w-full sm:w-auto px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-xl transition duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95">
+                    今天午餐吃哪間？
+                </button>
 
-                <!-- 距離篩選 (根據 OSM 座標計算距離) -->
-                <div class="flex-1 min-w-[120px]">
-                    <label for="distance-filter" class="text-xs font-semibold text-gray-600 flex items-center mb-1">
-                        <!-- MapPin Icon -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                        最大距離 (km)
-                    </label>
-                    <select id="distance-filter" class="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="1">1 km</option>
-                        <option value="3" selected>3 km</option>
-                        <option value="5">5 km</option>
-                        <option value="10">10 km</option>
-                        <option value="99">不限距離</option>
-                    </select>
+                <!-- 結果顯示區 -->
+                <div id="result-display" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-center min-h-[8rem] flex flex-col justify-center items-center">
+                    <p class="text-gray-500 italic">👆 點擊按鈕，開始隨機選擇！</p>
+                    <p id="loading-message" class="hidden text-blue-500 font-semibold mt-2">載入中...</p>
                 </div>
-            </div>
-
-            <!-- 隨機選擇按鈕 -->
-            <button
-                id="local-select-btn"
-                class="w-full py-3 mb-4 bg-red-500 text-white font-bold text-xl rounded-xl shadow-lg hover:bg-red-600 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center transform hover:scale-[1.01] active:scale-100"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 mr-2 animate-bounce"><path d="M12.5 17.5 17 21l-5.5-5.5"/><path d="M15 6.5 20 2l-3 3"/><path d="M2 12s2-4 6-4 6 4 6 4"/><path d="M2 12s2 4 6 4 6-4 6-4"/></svg>
-                請先設定地點
-            </button>
-
-            <!-- 店家列表 -->
-            <div id="local-stores-list" class="mt-4 space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                <h3 class="text-lg font-semibold text-gray-700">符合條件的店家預覽:</h3>
-                <div class="text-center text-gray-500 p-4">請先輸入地址並搜尋地點。</div>
             </div>
         </section>
 
-    </main>
-
-    <!-- 隨機結果 Modal -->
-    <div id="result-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 hidden" style="z-index: 1000;">
-        <div id="modal-content" class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm text-center transform scale-100 transition-transform duration-300">
-            <div class="mb-4">
-                <!-- Sparkles Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-12 h-12 text-yellow-500 mx-auto animate-pulse"><path d="m12 3-1.92 5.8 5.46 3.86-5.46-3.86-1.92 5.8 5.46-3.86-5.46 3.86-1.92-5.8 5.46 3.86-5.46-3.86z"/><path d="m22 17-1.92 5.8 5.46 3.86-5.46-3.86-1.92 5.8 5.46-3.86-5.46 3.86-1.92-5.8 5.46 3.86-5.46-3.86z"/><path d="m18 10-1.92 5.8 5.46 3.86-5.46-3.86-1.92 5.8 5.46-3.86-5.46 3.86-1.92-5.8 5.46 3.86-5.46-3.86z"/></svg>
+        <!-- 第二個區域：店家資料列表 (篩選器) -->
+        <section id="data-area" class="p-6">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b pb-2">🍽️ 店家清單 (Supabase 資料)</h2>
+            
+            <!-- 價位篩選器 -->
+            <div class="mb-6 flex flex-wrap items-center space-x-4">
+                <label for="price-filter" class="text-gray-700 font-medium whitespace-nowrap">依價位篩選:</label>
+                <select id="price-filter" class="p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-yellow-500 focus:border-yellow-500 transition duration-150">
+                    <option value="all">所有價位</option>
+                    <!-- !!! 關鍵更新: 使用中文字元作為 value。請確保 Supabase price_range 欄位的值完全匹配這些字串 !!! -->
+                    <option value="平價">平價</option> 
+                    <option value="中">中</option>
+                    <option value="中-中高">中-中高</option>
+                    <option value="高">高</option>
+                </select>
             </div>
-            <h2 id="modal-title" class="text-2xl font-extrabold text-gray-900 mb-2">決定是它了！</h2>
-            <p id="modal-source" class="text-sm text-gray-500 mb-4">來自 附近店家 的推薦</p>
-
-            <div class="p-4 bg-yellow-50 rounded-lg border-2 border-yellow-300">
-                <p id="modal-restaurant-name" class="text-3xl font-black text-yellow-800"></p>
-                <p id="modal-restaurant-cuisine" class="mt-1 text-lg text-yellow-700"></p>
+            
+            <div class="overflow-x-auto shadow-md rounded-lg">
+                <table id="restaurant-table" class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">店家名稱</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">類型</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">價位</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">營業時間</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">地圖</th>
+                        </tr>
+                    </thead>
+                    <tbody id="restaurant-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- 資料將會透過 JavaScript 載入這裡 -->
+                        <tr>
+                            <td colspan="5" class="px-4 py-4 text-center text-gray-400 italic">資料載入中...</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-
-            <button
-                id="modal-close-btn"
-                class="mt-6 w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition"
-            >
-                太棒了，我要去吃！
-            </button>
-        </div>
+        </section>
     </div>
 
-    <!-- 載入 Leaflet JS (OpenStreetMap) -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+    <!-- 載入 Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <script>
-        // =======================================================
-        // 📌 全域狀態 (Global State)
-        // =======================================================
+        // --- 1. Supabase 設定 ---
+        // Supabase URL 和 Anon Key
+        const SUPABASE_URL = 'https://qhhobqefysunhlfonlob.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoaG9icWVmeXN1bmhsZm9ubG9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxNzMwNTIsImV4cCI6MjA4MDc0OTA1Mn0.n5jZzxuPDsfUVWp1-GgYKqT_kMZ0q5CoTsfWkCyls-A';
         
-        const DEFAULT_LAT = 25.04776; 
-        const DEFAULT_LNG = 121.51731;
+        let supabaseClient = null;
 
-        const state = {
-            userLocation: {
-                lat: null,
-                lng: null,
-                status: '請輸入地址並點擊「搜尋地點」...',
-                address: ''
-            },
-            localStores: [],
-            isLoading: false,
-            selectedMeal: '午餐',
-            filters: {
-                price: 5,
-                maxDistance: 3,
-            },
-        };
-        
-        let map = null;
-        let markers = [];
+        // --- 2. DOM 元素參考 ---
+        const randomButton = document.getElementById('random-button');
+        const resultDisplay = document.getElementById('result-display');
+        const restaurantTableBody = document.getElementById('restaurant-table-body');
+        const loadingMessage = document.getElementById('loading-message');
+        const priceFilter = document.getElementById('price-filter'); // 篩選器參考
 
-        // =======================================================
-        // 🛠️ 輔助工具函數 (Helper Functions)
-        // =======================================================
-        
+        let allRestaurants = []; // 儲存所有從 Supabase 取得的店家資料
+
+        // --- 3. 核心功能函式 ---
+
         /**
-         * 執行 API 請求，帶有重試機制和速率限制等待。
+         * @description 渲染店家資料到表格中 (第二個區域)
+         * @param {Array<Object>} restaurants - 店家物件陣列
          */
-        const fetchWithRateLimit = async (url) => {
-            // Nominatim 速率限制：每次請求後等待 1.5 秒
-            await new Promise(resolve => setTimeout(resolve, 1500)); 
+        function renderRestaurantTable(restaurants) {
+            restaurantTableBody.innerHTML = ''; // 清空現有內容
 
-            const response = await fetch(url, {
-                headers: {
-                    'User-Agent': 'WhatToEatApp/1.0 (Contact: user@example.com)'
-                }
+            if (restaurants.length === 0) {
+                const selectedPriceText = priceFilter.value !== 'all' ? ` (在 ${priceFilter.options[priceFilter.selectedIndex].text} 篩選條件下)` : '';
+                restaurantTableBody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">目前清單沒有任何店家資料${selectedPriceText}。</td></tr>`;
+                return;
+            }
+
+            restaurants.forEach(restaurant => {
+                const row = restaurantTableBody.insertRow();
+                // 使用 Tailwind 樣式設定表格行
+                row.className = 'hover:bg-yellow-50 transition duration-150';
+
+                // 確保 link 欄位是有效的 URL，避免錯誤
+                const mapLink = restaurant.google_map_link && restaurant.google_map_link.startsWith('http') 
+                                ? restaurant.google_map_link 
+                                : '#';
+
+                row.innerHTML = `
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${restaurant.name || 'N/A'}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${restaurant.type || 'N/A'}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${restaurant.price_range || 'N/A'}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${restaurant.opening_hours || 'N/A'}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm">
+                        ${mapLink !== '#' ? 
+                            `<a href="${mapLink}" target="_blank" class="text-blue-600 hover:text-blue-800 font-semibold">地圖連結</a>` 
+                            : '<span class="text-gray-400">無連結</span>'
+                        }
+                    </td>
+                `;
             });
+        }
+
+        /**
+         * @description 從 Supabase 載入所有店家資料 (根據篩選條件)
+         */
+        async function loadRestaurants() {
+            loadingMessage.classList.remove('hidden'); // 顯示載入訊息
             
-            if (!response.ok) {
-                if (response.status === 429) {
-                    throw new Error(`API 請求過快 (429)，請稍候再試。`);
-                }
-                if (response.status === 400) {
-                    throw new Error(`搜尋參數錯誤 (400)，請嘗試簡化地址或搜尋關鍵字。`);
-                }
-                throw new Error(`API 請求失敗: ${response.status} ${response.statusText}`);
-            }
-            return response.json();
-        };
-
-        const setState = (newState) => {
-            Object.assign(state, newState);
-            updateUI();
-        };
-
-        const calculateDistance = (lat1, lon1, lat2, lon2) => {
-            const R = 6371; 
-            const dLat = (lat2 - lat1) * (Math.PI / 180);
-            const dLon = (lon2 - lon1) * (Math.PI / 180);
-            const a = 
-                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c; 
-        };
-
-        const createStoreCard = (store) => {
-            return `
-                <div class="p-4 bg-white/70 backdrop-blur-sm rounded-xl shadow-lg border border-gray-100 flex justify-between items-center transform transition duration-300 hover:scale-[1.01]">
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-800">${store.name}</h3>
-                        <p class="text-sm text-gray-500">${store.cuisine} (${store.type_key})</p>
-                        <div class="flex items-center space-x-2 mt-1 text-xs">
-                            <span class="flex items-center text-yellow-600">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                                ${store.rating} <span class="text-gray-400">(模擬)</span>
-                            </span>
-                            <span class="text-blue-500 font-medium">${store.distance.toFixed(1)} km</span>
-                            <span class="text-green-600">${'💰'.repeat(store.price)} <span class="text-gray-400">(模擬)</span></span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        };
-
-        // ---------------------------------------------------
-        // Leaflet 地圖函數 (Map Functions)
-        // ---------------------------------------------------
-
-        const initMap = (lat, lng) => {
-            if (map) return; 
-
-            // 🛑 重試機制：如果 L 未定義，等待 100ms 後重試
-            if (typeof L === 'undefined' || typeof L.map === 'undefined') {
-                 console.warn("Leaflet.js 尚未載入，100ms 後重試...");
-                 setTimeout(() => initMap(lat, lng), 100);
-                 return;
+            // 檢查憑證
+            if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY') {
+                const errorMsg = '<tr><td colspan="5" class="px-4 py-4 text-center text-red-600 font-bold">❌ 錯誤：請在程式碼中替換 SUPABASE_URL 和 SUPABASE_ANON_KEY 憑證！</td></tr>';
+                restaurantTableBody.innerHTML = errorMsg;
+                resultDisplay.innerHTML = '<p class="text-red-600 font-bold">⚠️ 設定錯誤：請檢查並填寫 Supabase 憑證！</p>';
+                loadingMessage.classList.add('hidden');
+                return; // 終止執行
             }
 
-            try {
-                map = L.map('map-container').setView([lat, lng], 14);
-
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
-                    maxZoom: 19,
-                }).addTo(map);
-                
-                console.log("Leaflet 地圖初始化成功！");
-            } catch (e) {
-                console.error("地圖初始化失敗:", e);
-            }
-        };
-
-        const updateMap = (lat, lng, stores) => {
-            if (!map) {
-                initMap(lat, lng);
-                if (!map) {
-                    setTimeout(() => updateMap(lat, lng, stores), 500);
+            // 在確認憑證有效後才初始化客戶端
+            if (!supabaseClient) {
+                try {
+                    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                    console.log("Supabase 客戶端初始化成功。");
+                } catch (e) {
+                    console.error('Supabase 客戶端初始化失敗:', e);
+                    resultDisplay.innerHTML = '<p class="text-red-600 font-bold">⚠️ 連線錯誤：Supabase URL 無效，請檢查格式是否正確 (需包含 https://)。</p>';
+                    loadingMessage.classList.add('hidden');
                     return;
                 }
             }
             
-            map.setView([lat, lng], 14);
-            
-            markers.forEach(marker => map.removeLayer(marker));
-            markers = [];
-
-            const searchMarker = L.marker([lat, lng], {
-                icon: L.divIcon({
-                    className: 'custom-search-icon',
-                    html: `<div class="bg-red-600 text-white text-xs font-bold p-1 rounded-full w-6 h-6 flex items-center justify-center shadow-lg transform hover:scale-110 transition">🏠</div>`,
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 24]
-                })
-            }).addTo(map)
-                .bindPopup(`<b>基準地址:</b> ${state.userLocation.address}`)
-                .openPopup();
-            markers.push(searchMarker);
-            
-            stores.slice(0, 10).forEach((store, index) => { 
-                const marker = L.marker([store.lat, store.lng], {
-                    icon: L.divIcon({
-                        className: 'custom-div-icon',
-                        html: `<div class="bg-indigo-600 text-white text-xs font-bold p-1 rounded-full w-6 h-6 flex items-center justify-center shadow-lg transform hover:scale-110 transition">${index + 1}</div>`,
-                        iconSize: [24, 24],
-                        iconAnchor: [12, 24]
-                    })
-                }).addTo(map)
-                .bindPopup(`<b>${store.name}</b><br>${store.cuisine}<br>${store.distance.toFixed(2)} km`);
-                markers.push(marker);
-            });
-        };
-
-
-        // ---------------------------------------------------
-        // DOM 更新函數 (Update UI)
-        // ---------------------------------------------------
-
-        const updateUI = () => {
-            const { userLocation, localStores, isLoading, filters, selectedMeal } = state;
-
-            const locationEl = document.getElementById('location-status');
-            const localBtnEl = document.getElementById('local-select-btn');
-
-            let icon = '';
-            let bgColorClass = '';
-            let iconColorClass = '';
-            
-            if (isLoading) {
-                icon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
-                bgColorClass = 'bg-yellow-100';
-                iconColorClass = 'text-yellow-700';
-                locationEl.innerHTML = `${icon} 正在使用 Nominatim 搜尋地址和附近店家... (請耐心等待)`;
-                locationEl.className = `flex-1 p-3 rounded-lg text-sm font-medium flex items-center mb-6 border border-yellow-300 ${bgColorClass} ${iconColorClass}`;
-                localBtnEl.textContent = '載入中...';
-                localBtnEl.disabled = true;
-
-            } else if (userLocation.lat && userLocation.lng) {
-                icon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`; 
-                bgColorClass = 'bg-green-100';
-                iconColorClass = 'text-green-700';
+            try {
+                // 基礎查詢
+                let query = supabaseClient
+                    .from('restaurants')
+                    .select('name, type, price_range, opening_hours, google_map_link');
                 
-                let locationText = `✅ 基準地址：${userLocation.address} <span class="text-xs text-green-500">(Lat: ${userLocation.lat.toFixed(4)}, Lng: ${userLocation.lng.toFixed(4)})</span>`;
+                // 取得選定的價位篩選值
+                const selectedPrice = priceFilter.value;
 
-                locationEl.className = `flex-1 p-3 rounded-lg text-sm font-medium flex items-center mb-6 border border-green-300 ${bgColorClass} ${iconColorClass}`;
-                locationEl.innerHTML = `${icon} ${locationText}`;
-            } else {
-                icon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2"><path d="M2 12s2-4 6-4 6 4 6 4"/><path d="M2 12s2 4 6 4 6-4 6-4"/><path d="M12 2v20M5 12h14"/></svg>`; 
-                bgColorClass = 'bg-gray-200';
-                iconColorClass = 'text-gray-700';
-                locationEl.className = `flex-1 p-3 rounded-lg text-sm text-gray-700 font-medium flex items-center mb-6 border border-gray-300`;
-                locationEl.innerHTML = `${icon} ${userLocation.status}`;
-            }
-
-            const isLocationSet = userLocation.lat !== null;
-            const filteredLocalStores = isLocationSet ? localStores.filter(store => {
-                if (store.price > filters.price) return false;
-                if (store.distance > filters.maxDistance) return false;
-                if (selectedMeal === '晚餐' && (store.name.includes('早餐') || store.name.includes('早午餐'))) return false; 
-                return true;
-            }) : [];
-
-            const localListEl = document.getElementById('local-stores-list');
-            const localCountEl = document.getElementById('local-store-count');
-            
-            localCountEl.textContent = filteredLocalStores.length;
-            localListEl.innerHTML = ''; 
-
-            if (!isLocationSet && !isLoading) {
-                 localBtnEl.textContent = '請先設定地點';
-                 localBtnEl.disabled = true;
-                 localListEl.innerHTML = '<h3 class="text-lg font-semibold text-gray-700">符合條件的店家預覽:</h3><div class="text-center text-gray-500 p-4">請先輸入地址並搜尋地點。</div>';
-            } else if (isLoading) {
-                localListEl.innerHTML = '<h3 class="text-lg font-semibold text-gray-700">符合條件的店家預覽:</h3><div class="text-center text-gray-500 p-4">資料載入中，請等待 Leaflet/OSM 請求完成...</div>';
-            } else if (filteredLocalStores.length === 0) {
-                localListEl.innerHTML = '<h3 class="text-lg font-semibold text-gray-700">符合條件的店家預覽:</h3><p class="text-center text-gray-500 p-4">Nominatim 搜尋不到符合條件店家，請嘗試更換地址或調整篩選條件。</p>';
-                localBtnEl.textContent = '無符合條件店家';
-                localBtnEl.disabled = true;
-            } else {
-                localBtnEl.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 mr-2 animate-bounce"><path d="M12.5 17.5 17 21l-5.5-5.5"/><path d="M15 6.5 20 2l-3 3"/><path d="M2 12s2-4 6-4 6 4 6 4"/><path d="M2 12s2 4 6 4 6-4 6-4"/></svg>
-                    從 ${filteredLocalStores.length} 間中隨機選擇！
-                `;
-                localBtnEl.disabled = false;
-                
-                const limitedStores = filteredLocalStores.slice(0, 5);
-                const listHtml = limitedStores.map(store => createStoreCard(store)).join('');
-                
-                localListEl.innerHTML = `<h3 class="text-lg font-semibold text-gray-700">符合條件的店家預覽:</h3><div class="space-y-3 mt-3">${listHtml}</div>`;
-                if (filteredLocalStores.length > 5) {
-                    localListEl.innerHTML += `<p class="text-sm text-center text-gray-500 mt-2">... 還有 ${filteredLocalStores.length - 5} 間符合條件的店家</p>`;
+                // 應用價位篩選
+                if (selectedPrice !== 'all') {
+                    // Supabase 的篩選條件：price_range 欄位必須等於選定的值
+                    // 這個值必須與 <select> option 的 value 屬性完全一致。
+                    query = query.eq('price_range', selectedPrice); 
                 }
+
+                // 執行查詢
+                const { data, error } = await query;
+
+                if (error) {
+                    console.error('Supabase 載入資料失敗:', error);
+                    resultDisplay.innerHTML = '<p class="text-red-600 font-bold">⚠️ 資料載入錯誤！請檢查 Supabase 設定與連線，以及資料庫的 RLS 規則。</p>';
+                    restaurantTableBody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-red-600 italic">無法載入資料。</td></tr>';
+                    return;
+                }
+
+                allRestaurants = data; // 更新全域變數 (現在只包含篩選後的資料)
+                renderRestaurantTable(data); // 渲染表格
+                
+                // 更新隨機選擇區域的提示
+                if (data.length === 0) {
+                     resultDisplay.innerHTML = '<p class="text-orange-500 font-bold">篩選結果：找不到符合條件的店家！</p>';
+                } else {
+                     resultDisplay.innerHTML = `<p class="text-gray-500 italic">👆 已篩選出 ${data.length} 間店家，點擊按鈕隨機選擇！</p>`;
+                }
+
+            } catch (err) {
+                console.error('連線或解析錯誤:', err);
+                resultDisplay.innerHTML = '<p class="text-red-600 font-bold">⚠️ 發生未預期的錯誤！</p>';
+            } finally {
+                loadingMessage.classList.add('hidden'); // 隱藏載入訊息
             }
-        };
+        }
 
-        // ---------------------------------------------------
-        // 核心邏輯函數 (Core Logic)
-        // ---------------------------------------------------
-
-        const searchLocationAndFetchStores = async (address) => {
-            if (!address.trim()) {
-                setState({ 
-                    userLocation: { lat: null, lng: null, status: '請輸入有效的地址。', address: '' }, 
-                    localStores: [],
-                    isLoading: false 
-                });
+        /**
+         * @description 隨機選擇一個店家並顯示結果 (第一個區域)
+         */
+        function selectRandomRestaurant() {
+            // 如果 supabaseClient 尚未初始化，則直接顯示錯誤訊息
+            if (!supabaseClient) {
+                resultDisplay.innerHTML = '<p class="text-red-600 font-bold">⚠️ 請先解決 Supabase 連線憑證問題！</p>';
                 return;
             }
             
-            setState({ isLoading: true });
-
-            try {
-                // 1. Geocoding
-                const geocodeUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&addressdetails=1`;
-                console.log(`[Nominatim Geocoding] URL: ${geocodeUrl}`);
-                const geocodeData = await fetchWithRateLimit(geocodeUrl);
-
-                if (!geocodeData || geocodeData.length === 0) {
-                     setState({ 
-                        userLocation: { lat: null, lng: null, status: '❌ Geocoding 失敗：找不到該地址。', address: address }, 
-                        localStores: [],
-                        isLoading: false 
-                    });
-                    return;
-                }
-
-                const geoResult = geocodeData[0];
-                const lat = parseFloat(geoResult.lat);
-                const lng = parseFloat(geoResult.lon);
-                
-                // 2. Places Search (FIXED: Simplified query to avoid 400 Bad Request)
-                // 原本使用 "restaurant near ..." 容易導致 400 錯誤。
-                // 改為在 viewbox 內搜尋 "restaurant" 關鍵字，並結合 bounded=1
-                // 擴大一點範圍 (0.015 約 1.5km)
-                const boundSize = 0.015;
-                const viewboxStr = `${lng - boundSize},${lat - boundSize},${lng + boundSize},${lat + boundSize}`;
-                
-                // 使用 amenity=restaurant 結構化查詢可能更穩，但 search 接口主要用 q
-                // 這裡改用 q=restaurant 配合 bounded=1
-                const placesUrl = `https://nominatim.openstreetmap.org/search?q=restaurant&format=json&limit=50&viewbox=${viewboxStr}&bounded=1`;
-                
-                console.log(`[Nominatim Places Search] URL: ${placesUrl}`);
-                const placesData = await fetchWithRateLimit(placesUrl);
-                
-                // 3. Process Data
-                const originLat = lat;
-                const originLng = lng;
-
-                const stores = placesData.map(p => {
-                    const storeLat = parseFloat(p.lat);
-                    const storeLng = parseFloat(p.lon);
-                    
-                    return {
-                        id: p.osm_id,
-                        name: p.name || p.display_name.split(',')[0] || '未知餐廳', 
-                        cuisine: p.type || '美食',
-                        type_key: p.class, 
-                        lat: storeLat,
-                        lng: storeLng,
-                        distance: calculateDistance(originLat, originLng, storeLat, storeLng),
-                        price: Math.floor(Math.random() * 5) + 1, 
-                        rating: (Math.random() * (5 - 3.5) + 3.5).toFixed(1)
-                    };
-                }).filter(store => store.distance > 0.005) // 稍微過濾掉距離極近的點
-                  .sort((a, b) => a.distance - b.distance); 
-
-                setState({ 
-                    userLocation: { lat, lng, status: '已成功載入店家數據。', address: address },
-                    localStores: stores,
-                    isLoading: false 
-                });
-                
-                updateMap(lat, lng, stores);
-
-            } catch (error) {
-                console.error("API 請求錯誤:", error);
-                setState({ 
-                    userLocation: { lat: null, lng: null, status: `❌ ${error.message}`, address: '' }, 
-                    localStores: [],
-                    isLoading: false 
-                });
-            }
-        };
-
-        const handleAddressSearch = () => {
-            const addressInput = document.getElementById('search-address').value;
-            // 地圖初始化由 updateMap 處理
-            searchLocationAndFetchStores(addressInput);
-        };
-
-        const handleRandomSelect = () => {
-            const { localStores, filters, selectedMeal } = state;
+            randomButton.disabled = true; // 禁用按鈕防止重複點擊
             
-            const listToChoose = localStores.filter(store => {
-                if (store.price > filters.price) return false;
-                if (store.distance > filters.maxDistance) return false;
-                if (selectedMeal === '晚餐' && (store.name.includes('早餐') || store.name.includes('早午餐'))) return false;
-                return true;
-            });
-
-            let result = null;
-            if (listToChoose.length === 0) {
-                result = { name: '😢 抱歉', cuisine: '無符合條件的店家' };
-            } else {
-                const randomIndex = Math.floor(Math.random() * listToChoose.length);
-                result = listToChoose[randomIndex];
+            // 現在 allRestaurants 已經是篩選後的清單
+            if (allRestaurants.length === 0) {
+                resultDisplay.innerHTML = '<p class="text-red-600 font-bold">店家清單是空的！請先新增資料或放寬篩選條件再試。</p>';
+                randomButton.disabled = false;
+                return;
             }
 
-            showResultModal(result, '附近店家');
-        };
+            // 隨機產生一個索引
+            const randomIndex = Math.floor(Math.random() * allRestaurants.length);
+            
+            // 取得隨機選擇的店家
+            const selectedRestaurant = allRestaurants[randomIndex];
+
+            // 設置一個簡單的動畫效果 (例如：旋轉文字)
+            resultDisplay.innerHTML = '<p class="text-3xl font-extrabold text-gray-700 animate-pulse">正在為您選擇中...</p>';
+            
+            // 延遲顯示結果，模擬思考過程
+            setTimeout(() => {
+                randomButton.disabled = false; // 啟用按鈕
+                
+                // 確保 link 欄位是有效的 URL
+                const mapLink = selectedRestaurant.google_map_link && selectedRestaurant.google_map_link.startsWith('http') 
+                                ? selectedRestaurant.google_map_link 
+                                : '#';
+
+                resultDisplay.innerHTML = `
+                    <h3 class="text-3xl font-extrabold text-green-700 mt-2">🎉 今日午餐就是：<span class="text-red-600">${selectedRestaurant.name}</span></h3>
+                    <div class="mt-3 text-lg space-y-1">
+                        <p>🍜 類型: <span class="font-semibold">${selectedRestaurant.type || '未知'}</span></p>
+                        <p>💰 價位: <span class="font-semibold">${selectedRestaurant.price_range || '未知'}</span></p>
+                        <p>🕒 營業時間: <span class="font-semibold">${selectedRestaurant.opening_hours || '未知'}</span></p>
+                    </div>
+                    ${mapLink !== '#' ? 
+                        `<a href="${mapLink}" target="_blank" class="mt-4 inline-block px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition duration-150">
+                            🗺️ 查看 Google 地圖
+                        </a>` 
+                        : '<p class="text-gray-400 mt-4">無地圖連結</p>'
+                    }
+                `;
+            }, 1500); // 延遲 1.5 秒
+        }
+
+        // --- 4. 事件監聽與初始化 ---
+
+        // 監聽按鈕點擊事件
+        randomButton.addEventListener('click', selectRandomRestaurant);
         
-        const showResultModal = (result, source) => {
-            document.getElementById('modal-restaurant-name').textContent = result.name;
-            document.getElementById('modal-restaurant-cuisine').textContent = result.name === '😢 抱歉' ? '' : `${result.cuisine} (距離: ${result.distance ? result.distance.toFixed(2) + ' km' : 'N/A'})`;
-            document.getElementById('modal-title').textContent = result.name === '😢 抱歉' ? result.name : '決定是它了！';
-            document.getElementById('modal-source').textContent = result.name === '😢 抱歉' ? result.cuisine : `來自 ${source} 的推薦`;
+        // 監聽價位篩選器變動，重新載入資料
+        priceFilter.addEventListener('change', loadRestaurants);
 
-            document.getElementById('result-modal').classList.remove('hidden');
-        };
+        // 網頁載入完成時，立即載入店家資料
+        document.addEventListener('DOMContentLoaded', loadRestaurants);
 
-        const hideResultModal = () => {
-            document.getElementById('result-modal').classList.add('hidden');
-        };
-
-
-        // ---------------------------------------------------
-        // 🚀 初始化與事件監聽
-        // ---------------------------------------------------
-
-        window.onload = () => {
-            // 1. 初始 UI 狀態
-            updateUI();
-            
-            // 2. 篩選器事件監聽
-            document.getElementById('meal-selector').addEventListener('change', (e) => {
-                setState({ selectedMeal: e.target.value });
-            });
-            document.getElementById('price-filter').addEventListener('change', (e) => {
-                setState({ filters: { ...state.filters, price: parseInt(e.target.value) } });
-            });
-            document.getElementById('distance-filter').addEventListener('change', (e) => {
-                setState({ filters: { ...state.filters, maxDistance: parseInt(e.target.value) } });
-            });
-
-            // 3. 地址搜尋事件監聽
-            const searchBtn = document.getElementById('search-location-btn');
-            const searchInput = document.getElementById('search-address');
-
-            searchBtn.addEventListener('click', handleAddressSearch);
-            searchInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    handleAddressSearch();
-                }
-            });
-
-            // 4. 隨機選擇按鈕事件監聽
-            document.getElementById('local-select-btn').addEventListener('click', handleRandomSelect);
-
-            // 5. Modal 關閉事件監聽
-            document.getElementById('modal-close-btn').addEventListener('click', hideResultModal);
-            document.getElementById('result-modal').addEventListener('click', (e) => {
-                if (e.target.id === 'result-modal') {
-                    hideResultModal();
-                }
-            });
-            
-            // 6. 首次載入地圖 (初始化到預設位置)
-            initMap(DEFAULT_LAT, DEFAULT_LNG);
-        };
     </script>
 </body>
 </html>
