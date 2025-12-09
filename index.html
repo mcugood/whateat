@@ -44,12 +44,12 @@
                 附近店家選擇器 (<span id="local-store-count">0</span> 間)
             </h2>
             
-            <!-- 📍 目前位置資訊 & 重新定位按鈕 (新增此按鈕) -->
+            <!-- 📍 目前位置資訊 & 重新定位按鈕 -->
             <div class="flex items-stretch gap-2 mb-4">
                 <div id="location-status" class="flex-1 p-3 bg-indigo-50 rounded-lg text-sm text-indigo-700 font-medium flex items-center">
                     <!-- MapPin Icon -->
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                    正在獲取您的目前位置...
+                    正在請求定位權限...
                 </div>
                 <button id="re-locate-btn" class="p-3 bg-indigo-500 text-white rounded-lg text-xs font-semibold hover:bg-indigo-600 transition shadow-md whitespace-nowrap flex items-center justify-center">
                     <!-- RotateCcw Icon -->
@@ -155,6 +155,11 @@
         // =======================================================
         // 📌 全域狀態 (Global State)
         // =======================================================
+        
+        // 模擬定位的基準點 (台北車站附近 - 當真實定位失敗時使用此點並加上隨機偏移)
+        const FALLBACK_LAT = 25.047;
+        const FALLBACK_LNG = 121.517;
+
         const state = {
             userLocation: null,
             localStores: [],
@@ -172,6 +177,8 @@
                 { id: 4, name: "老王便當店", cuisine: "台式", price: 1, distance: 2.5, rating: 4.5 },
                 { id: 5, name: "韓式炸雞", cuisine: "韓式", price: 3, distance: 0.8, rating: 4.1 },
                 { id: 6, name: "傳統早餐店 (晚餐時段不開)", cuisine: "中式", price: 1, distance: 0.1, rating: 4.0 },
+                { id: 7, name: "奢華義大利麵", cuisine: "義式", price: 5, distance: 4.0, rating: 4.6 },
+                { id: 8, name: "平價泰式小吃", cuisine: "泰式", price: 2, distance: 0.9, rating: 4.4 },
             ],
         };
 
@@ -189,10 +196,6 @@
             Object.assign(state, newState);
             updateUI();
         };
-
-        // ---------------------------------------------------
-        // UI 組件生成器
-        // ---------------------------------------------------
 
         /**
          * 生成店家卡片的 HTML
@@ -231,15 +234,25 @@
 
             // 1. 地理位置狀態更新
             const locationEl = document.getElementById('location-status');
+            const localBtnEl = document.getElementById('local-select-btn');
+
             if (userLocation) {
-                const icon = userLocation.status && userLocation.status.includes('無法定位')
-                    ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2 text-red-500"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/><path d="M16.95 7.05 19.07 4.93"/><line x1="12" x2="12" y1="2" y2="4"/><line x1="12" x2="12" y1="20" y2="22"/></svg>`
+                // 檢查是否為錯誤或模擬模式 (使用紅色或橙色背景)
+                const isErrorOrSimulation = userLocation.status.includes('錯誤') || userLocation.status.includes('模擬');
+                const bgColorClass = isErrorOrSimulation ? 'bg-red-100' : 'bg-indigo-50';
+                const iconColorClass = isErrorOrSimulation ? 'text-red-500' : 'text-indigo-700';
+                
+                locationEl.className = `flex-1 p-3 rounded-lg text-sm font-medium flex items-center ${bgColorClass} ${iconColorClass}`;
+                
+                const icon = isErrorOrSimulation
+                    ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/></svg>`
                     : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
 
-                locationEl.innerHTML = `
-                    ${icon}
-                    ${userLocation.status || `目前位置：緯度: ${userLocation.lat.toFixed(3)}, 經度: ${userLocation.lng.toFixed(3)}`}
-                `;
+                const locationText = userLocation.status.includes('Real GPS Data')
+                    ? `當前實際位置：緯度: ${userLocation.lat.toFixed(4)}, 經度: ${userLocation.lng.toFixed(4)}`
+                    : `${userLocation.status} 緯度: ${userLocation.lat.toFixed(4)}, 經度: ${userLocation.lng.toFixed(4)}`;
+
+                locationEl.innerHTML = `${icon} ${locationText}`;
             }
 
             // 2. 篩選後的本地店家列表
@@ -254,14 +267,13 @@
             // 3. 更新附近店家列表
             const localListEl = document.getElementById('local-stores-list');
             const localCountEl = document.getElementById('local-store-count');
-            const localBtnEl = document.getElementById('local-select-btn');
             
             localCountEl.textContent = filteredLocalStores.length;
             localListEl.innerHTML = ''; // 清空列表
 
             if (isLoading) {
                 localListEl.innerHTML = '<div class="text-center text-gray-500 p-4">資料載入中...</div>';
-                localBtnEl.textContent = '載入中...';
+                localBtnEl.textContent = '定位中...';
                 localBtnEl.disabled = true;
             } else if (filteredLocalStores.length === 0) {
                 localListEl.innerHTML = '<p class="text-center text-gray-500 p-4">無符合條件店家，請調整篩選條件。</p>';
@@ -290,27 +302,82 @@
         // ---------------------------------------------------
 
         /**
-         * 處理地理位置獲取 (因執行環境限制，直接使用預設位置)
-         * NOTE: 從 initGeolocation 更名為 getGeolocation
+         * 處理地理位置獲取 (優先使用瀏覽器 Geolocation API，若失敗則使用帶有隨機偏移的模擬位置)
          */
         const getGeolocation = () => {
-            // 預設位置 (台北 101 附近)
-            const defaultLocation = { 
-                lat: 25.033, 
-                lng: 121.565, 
-                status: '注意：環境限制無法定位，已使用預設位置 (台北 101 附近)。' 
+            setState({ isLoading: true, userLocation: { status: '正在請求定位權限...', lat: null, lng: null } });
+
+            // 隨機偏移量 (約 +/- 1.1 公里) - 用於模擬模式
+            const randomOffset = () => (Math.random() - 0.5) * 0.02; 
+            const SIMULATION_STATUS_MSG = '注意：環境限制無法定位，已啟用模擬位置隨機偏移。';
+
+
+            // --- Fallback Simulation Function ---
+            const simulateLocation = (statusMsg) => {
+                 const newLocation = { 
+                    lat: FALLBACK_LAT + randomOffset(), 
+                    lng: FALLBACK_LNG + randomOffset(), 
+                    status: statusMsg
+                };
+                setTimeout(() => {
+                    setState({ userLocation: newLocation, isLoading: false });
+                    fetchData();
+                }, 500);
+            }
+
+            // 1. 檢查是否支持 Geolocation (通常在非 HTTPS 或 iFrame 環境會失敗)
+            if (!navigator.geolocation) {
+                 // 瀏覽器不支援 Geolocation API
+                simulateLocation('定位錯誤：瀏覽器不支援，' + SIMULATION_STATUS_MSG);
+                return;
+            }
+
+            // 2. --- Real Geolocation Attempt ---
+
+            // 成功回調函數
+            const success = (position) => {
+                setState({
+                    userLocation: {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        status: '✅ 已成功獲取當前實際位置 (Real GPS Data)。'
+                    },
+                    isLoading: false
+                });
+                fetchData();
             };
 
-            // 由於 Geolocation 被禁用，我們直接使用預設位置。
-            setState({ userLocation: defaultLocation });
+            // 錯誤回調函數
+            const error = (err) => {
+                let statusMessage = '定位錯誤：無法獲取您的位置。';
+                if (err.code === err.PERMISSION_DENIED) {
+                    // 這就是您遇到的情況：權限被拒絕或被環境封鎖
+                    statusMessage = '定位錯誤：您拒絕了位置請求或權限被環境封鎖。';
+                } else if (err.code === err.TIMEOUT) {
+                    statusMessage = '定位錯誤：請求超時。';
+                }
+                
+                // 定位失敗，使用帶有隨機偏移的模擬位置
+                simulateLocation(`${statusMessage} 已啟用隨機模擬位置。`);
+            };
+
+            // 選項配置
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            };
+
+            // 呼叫 Geolocation API
+            navigator.geolocation.getCurrentPosition(success, error, options);
         };
 
         /**
          * 模擬資料載入
          */
         const fetchData = async () => {
-            setState({ isLoading: true });
-            
+            // 在真實應用中，這裡會使用 state.userLocation.lat/lng 來向 API 請求「附近」的店家
+            // 這裡只是模擬載入
             try {
                 // 模擬獲取附近的店家
                 const localData = await mockFetch(state.mockLocalRestaurants, 500);
@@ -325,7 +392,8 @@
                     localStores: state.mockLocalRestaurants,
                 });
             } finally {
-                setState({ isLoading: false });
+                // 如果定位成功，isLoading 已經在 getGeolocation 的 success 函數中設為 false
+                // 如果定位失敗並切換到模擬，isLoading 已經在 simulateLocation 函數中設為 false
             }
         };
 
@@ -383,8 +451,7 @@
 
         window.onload = () => {
             // 1. 初始數據載入與定位
-            getGeolocation(); // 獲取（或設定）位置
-            fetchData(); // 載入資料
+            getGeolocation(); 
             
             // 2. 篩選器事件監聽
             document.getElementById('meal-selector').addEventListener('change', (e) => {
@@ -397,11 +464,9 @@
                 setState({ filters: { ...state.filters, maxDistance: parseInt(e.target.value) } });
             });
 
-            // 3. 重新定位按鈕事件監聽 (新增)
+            // 3. 重新定位按鈕事件監聽
             document.getElementById('re-locate-btn').addEventListener('click', () => {
-                setState({ isLoading: true }); // 顯示載入狀態
-                getGeolocation(); // 重新設定位置 (目前為模擬位置)
-                fetchData(); // 重新擷取資料 (模擬刷新)
+                getGeolocation(); // 重新觸發定位
             });
             
             // 4. 隨機選擇按鈕事件監聽
